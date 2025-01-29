@@ -281,7 +281,20 @@ git remote set-url origin $remoteUrl
 
 # 尝试推送
 try {
+    # 先尝试拉取最新代码
+    Write-Host "拉取远程更新..." -ForegroundColor Green
+    git pull origin main --no-rebase
+    
+    # 如果有冲突，使用本地版本
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "检测到冲突，使用本地版本..." -ForegroundColor Yellow
+        git checkout --ours .
+        git add .
+        git commit -m "Merge remote changes (keep local version)"
+    }
+    
     # 推送到 main 分支
+    Write-Host "推送更新..." -ForegroundColor Green
     git push -u origin main
     # 推送标签
     git push origin --tags
