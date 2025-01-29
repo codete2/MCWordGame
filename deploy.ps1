@@ -258,6 +258,13 @@ if ($currentBranch -eq "") {
     # 如果没有分支，创建 main 分支
     Write-Host "`n创建 main 分支..." -ForegroundColor Green
     git checkout -b main
+} elseif ($currentBranch -ne "main") {
+    # 如果不在 main 分支，切换到 main
+    Write-Host "`n切换到 main 分支..." -ForegroundColor Green
+    git checkout main 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        git checkout -b main
+    }
 }
 
 # 推送到 GitHub（使用 token 认证）
@@ -269,18 +276,18 @@ if ([string]::IsNullOrEmpty($githubUsername)) {
 }
 
 $remoteUrl = "https://${githubUsername}:${githubTokenText}@github.com/${githubUsername}/MCWordGame.git"
-Write-Host "正在推送到: github.com/${githubUsername}/MCWordGame.git" -ForegroundColor Yellow
+Write-Host "正在推送到: github.com/${githubUsername}/MCWordGame.git (main 分支)" -ForegroundColor Yellow
 git remote set-url origin $remoteUrl
 
 # 尝试推送
 try {
-    # 先尝试推送当前分支
-    git push -u origin HEAD
-    # 再推送标签
+    # 推送到 main 分支
+    git push -u origin main
+    # 推送标签
     git push origin --tags
 } catch {
     Write-Host "推送失败，尝试强制推送..." -ForegroundColor Yellow
-    git push -u origin HEAD --force
+    git push -u origin main --force
     git push origin --tags --force
 }
 
