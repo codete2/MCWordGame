@@ -1,0 +1,12 @@
+# MCWordGame 配置文件
+settings:
+  # 是否允许普通玩家开始游戏（需要支付对应奖励）
+  allow-player-start: true
+  # 默认词库设置（default为内置词库，其他值需要在插件目录下创建对应的txt文件）
+  word-list: default
+  # 自定义词库最小词语数量
+  min-words: 10
+  # 默认获奖人数（可在游戏开始时通过 winners 参数修改）
+  default-winners: 1
+  # 默认游戏时间（秒）
+  default-time: 30 

@@ -1,0 +1,23 @@
+﻿name: MCWordGame
+version: '1.7.0-RELEASE'
+main: dev.codetea.mcwordgame.MCWordGame
+api-version: '1.7.0-RELEASE'
+depend: [Vault]
+author: Codetea
+commands:
+  mcwg:
+    description: MCWordGame 主指令
+    usage: |
+      §6========= MCWordGame 指令帮助 =========
+      §e/mcwg start xp <数量> §7- 开始一场游戏，奖励经验值
+      §e/mcwg start item <物品> <数量> §7- 开始一场游戏，奖励物品
+      §e/mcwg start money <数量> §7- 开始一场游戏，奖励金币
+      §e/mcwg top §7- 查看胜利次数排行榜
+      §7提示：非OP玩家开始游戏需要支付对应奖励
+      §6====================================
+    aliases: [wordgame, wg]
+    permission: mcwordgame.use
+permissions:
+  mcwordgame.use:
+    description: 允许使用 /mcwg 指令
+    default: true 
