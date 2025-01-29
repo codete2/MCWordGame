@@ -154,53 +154,6 @@ if (-not (Test-Path ".git")) {
     git config user.email $gitEmail
 }
 
-# 创建 GitHub Actions 配置
-if (-not (Test-Path ".github\workflows")) {
-    New-Item -ItemType Directory -Path ".github\workflows" -Force | Out-Null
-}
-
-Write-Host "`n创建 GitHub Actions 配置..." -ForegroundColor Green
-$workflowContent = @"
-name: Build MCWordGame
-
-on:
-  push:
-    branches: [ main ]
-    tags: [ 'v*' ]
-  pull_request:
-    branches: [ main ]
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v3
-    
-    - name: Set up JDK 17
-      uses: actions/setup-java@v3
-      with:
-        java-version: '17'
-        distribution: 'temurin'
-        cache: maven
-        
-    - name: Build with Maven
-      run: mvn -B package --file pom.xml
-      
-    - name: Upload artifact
-      uses: actions/upload-artifact@v3
-      with:
-        name: MCWordGame
-        path: target/MCWordGame-*.jar
-
-    - name: Create Release
-      if: startsWith(github.ref, 'refs/tags/')
-      uses: softprops/action-gh-release@v1
-      with:
-        files: target/MCWordGame-*.jar
-        generate_release_notes: true
-"@
-$workflowContent | Set-Content ".github\workflows\build.yml" -Encoding UTF8
-
 # 构建项目
 Write-Host "`n构建项目..." -ForegroundColor Green
 mvn clean package
@@ -220,95 +173,64 @@ git commit -m "Update MCWordGame plugin to version $newVersion"
 Write-Host "`n创建版本标签..." -ForegroundColor Green
 git tag -a "v$newVersion" -m "Version $newVersion"
 
-# 检查远程仓库
-$remoteExists = git remote -v | Select-String "origin"
-if (-not $remoteExists) {
-    Write-Host "`n创建 GitHub 仓库..." -ForegroundColor Green
-    $headers = @{
-        Authorization = "token $githubTokenText"
-        Accept = "application/vnd.github.v3+json"
-    }
-    
-    $body = @{
-        name = "MCWordGame"
-        description = "Minecraft 文字竞速游戏插件"
-        private = $false
+# 推送到 GitHub
+Write-Host "`n推送到 GitHub..." -ForegroundColor Green
+$remoteUrl = "https://${githubUsername}:${githubTokenText}@github.com/${githubUsername}/MCWordGame.git"
+git remote set-url origin $remoteUrl
+git push -u origin main --force
+git push origin --tags --force
+
+# 创建 Release
+Write-Host "`n创建 Release..." -ForegroundColor Green
+$jarFile = Get-ChildItem "target/MCWordGame-*.jar" | Select-Object -First 1
+if ($jarFile) {
+    $releaseData = @{
+        tag_name = "v$newVersion"
+        name = "Version $newVersion"
+        body = "MCWordGame Plugin Version $newVersion"
+        draft = $false
+        prerelease = $false
     } | ConvertTo-Json
 
     try {
-        $response = Invoke-RestMethod -Uri "https://api.github.com/user/repos" `
+        # 创建 Release
+        $release = Invoke-RestMethod `
+            -Uri "https://api.github.com/repos/$githubUsername/MCWordGame/releases" `
             -Method Post `
-            -Headers $headers `
-            -Body $body `
+            -Headers @{
+                Authorization = "token $githubTokenText"
+                Accept = "application/vnd.github.v3+json"
+            } `
+            -Body $releaseData `
             -ContentType "application/json"
 
-        Write-Host "`n添加远程仓库..." -ForegroundColor Green
-        git remote add origin "https://github.com/$githubUsername/MCWordGame.git"
+        # 上传构建好的 jar 文件
+        $uploadUrl = $release.upload_url -replace "{.*}$", ""
+        $fileName = $jarFile.Name
+        
+        Invoke-RestMethod `
+            -Uri "${uploadUrl}?name=${fileName}" `
+            -Method Post `
+            -Headers @{
+                Authorization = "token $githubTokenText"
+                Accept = "application/vnd.github.v3+json"
+            } `
+            -InFile $jarFile.FullName `
+            -ContentType "application/java-archive"
+
+        Write-Host "Release 创建成功！" -ForegroundColor Green
     } catch {
-        Write-Host "错误：创建仓库失败！" -ForegroundColor Red
+        Write-Host "创建 Release 失败：" -ForegroundColor Red
         Write-Host $_.Exception.Message -ForegroundColor Red
-        pause
-        exit 1
     }
-}
-
-# 检查当前分支
-$currentBranch = git rev-parse --abbrev-ref HEAD
-if ($currentBranch -eq "") {
-    # 如果没有分支，创建 main 分支
-    Write-Host "`n创建 main 分支..." -ForegroundColor Green
-    git checkout -b main
-} elseif ($currentBranch -ne "main") {
-    # 如果不在 main 分支，切换到 main
-    Write-Host "`n切换到 main 分支..." -ForegroundColor Green
-    git checkout main 2>$null
-    if ($LASTEXITCODE -ne 0) {
-        git checkout -b main
-    }
-}
-
-# 推送到 GitHub（使用 token 认证）
-Write-Host "`n推送到 GitHub..." -ForegroundColor Green
-if ([string]::IsNullOrEmpty($githubUsername)) {
-    Write-Host "错误：GitHub 用户名为空！" -ForegroundColor Red
-    $githubUsername = Read-Host "请重新输入你的 GitHub 用户名"
-    $githubUsername | Set-Content $usernamePath
-}
-
-$remoteUrl = "https://${githubUsername}:${githubTokenText}@github.com/${githubUsername}/MCWordGame.git"
-Write-Host "正在推送到: github.com/${githubUsername}/MCWordGame.git (main 分支)" -ForegroundColor Yellow
-git remote set-url origin $remoteUrl
-
-# 尝试推送
-try {
-    # 先尝试拉取最新代码（允许不相关历史）
-    Write-Host "拉取远程更新..." -ForegroundColor Green
-    git pull origin main --allow-unrelated-histories
-    
-    # 如果有冲突，使用本地版本
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "检测到冲突，使用本地版本..." -ForegroundColor Yellow
-        git checkout --ours .
-        git add .
-        git commit -m "Merge remote changes (keep local version)"
-    }
-    
-    # 推送到 main 分支
-    Write-Host "推送更新..." -ForegroundColor Green
-    git push -u origin main
-    # 推送标签
-    git push origin --tags
-} catch {
-    Write-Host "推送失败，尝试强制推送..." -ForegroundColor Yellow
-    git push -u origin main --force
-    git push origin --tags --force
+} else {
+    Write-Host "未找到构建好的 jar 文件！" -ForegroundColor Red
 }
 
 Write-Host "`n=== 部署完成！===" -ForegroundColor Green
 Write-Host "版本已更新至: $newVersion" -ForegroundColor Cyan
 Write-Host "你的插件已经上传到：https://github.com/$githubUsername/MCWordGame" -ForegroundColor Yellow
 Write-Host "构建好的插件在 target 目录下" -ForegroundColor Yellow
-Write-Host "GitHub Actions 将自动构建并创建发布" -ForegroundColor Yellow
 Write-Host ""
 
 pause 
