@@ -97,15 +97,29 @@ if ($confirm -ne "Y") {
     exit 1
 }
 
-# 更新版本号
+# 更新 pom.xml 版本号
 Write-Host "`n更新 pom.xml 版本号..." -ForegroundColor Green
-mvn versions:set -DnewVersion=$newVersion -DgenerateBackupPoms=false
+$pomContent = Get-Content "pom.xml" -Raw
+$lines = $pomContent -split "`n"
+$updated = $false
+
+# 只更新第一个找到的版本号（项目版本号）
+for ($i = 0; $i -lt $lines.Count; $i++) {
+    if (-not $updated -and $lines[$i] -match '<version>.*</version>') {
+        $lines[$i] = $lines[$i] -replace '<version>.*</version>', "<version>$newVersion</version>"
+        $updated = $true
+    }
+}
+
+$pomContent = $lines -join "`n"
+$pomContent | Set-Content "pom.xml" -Encoding UTF8
 
 # 更新 plugin.yml
 Write-Host "`n更新 plugin.yml 版本号..." -ForegroundColor Green
-$content = Get-Content "src/main/resources/plugin.yml" -Encoding UTF8
-$content = $content -replace "version: '.*'", "version: '$newVersion'"
-$content | Set-Content "src/main/resources/plugin.yml" -Encoding UTF8
+$ymlContent = Get-Content "src/main/resources/plugin.yml" -Encoding UTF8
+$ymlContent = $ymlContent -replace "version: '.*?'", "version: '$newVersion'"
+$ymlContent = $ymlContent -replace "api-version: '.*?'", "api-version: '$newVersion'"
+$ymlContent | Set-Content "src/main/resources/plugin.yml" -Encoding UTF8
 
 # 尝试读取保存的 Token 和用户名
 $tokenPath = ".github_token"
