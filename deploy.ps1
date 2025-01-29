@@ -281,9 +281,9 @@ git remote set-url origin $remoteUrl
 
 # 尝试推送
 try {
-    # 先尝试拉取最新代码
+    # 先尝试拉取最新代码（允许不相关历史）
     Write-Host "拉取远程更新..." -ForegroundColor Green
-    git pull origin main --no-rebase
+    git pull origin main --allow-unrelated-histories
     
     # 如果有冲突，使用本地版本
     if ($LASTEXITCODE -ne 0) {
