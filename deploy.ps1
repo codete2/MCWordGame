@@ -234,11 +234,30 @@ if (-not $remoteExists) {
     }
 }
 
+# 检查当前分支
+$currentBranch = git rev-parse --abbrev-ref HEAD
+if ($currentBranch -eq "") {
+    # 如果没有分支，创建 main 分支
+    Write-Host "`n创建 main 分支..." -ForegroundColor Green
+    git checkout -b main
+}
+
 # 推送到 GitHub（使用 token 认证）
 Write-Host "`n推送到 GitHub..." -ForegroundColor Green
 $remoteUrl = "https://${githubUsername}:${githubTokenText}@github.com/${githubUsername}/MCWordGame.git"
 git remote set-url origin $remoteUrl
-git push -u origin main --tags
+
+# 尝试推送
+try {
+    # 先尝试推送当前分支
+    git push -u origin HEAD
+    # 再推送标签
+    git push origin --tags
+} catch {
+    Write-Host "推送失败，尝试强制推送..." -ForegroundColor Yellow
+    git push -u origin HEAD --force
+    git push origin --tags --force
+}
 
 Write-Host "`n=== 部署完成！===" -ForegroundColor Green
 Write-Host "版本已更新至: $newVersion" -ForegroundColor Cyan
