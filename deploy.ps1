@@ -107,11 +107,14 @@ $content = Get-Content "src/main/resources/plugin.yml" -Encoding UTF8
 $content = $content -replace "version: '.*'", "version: '$newVersion'"
 $content | Set-Content "src/main/resources/plugin.yml" -Encoding UTF8
 
-# 尝试读取保存的 Token
+# 尝试读取保存的 Token 和用户名
 $tokenPath = ".github_token"
-if (Test-Path $tokenPath) {
+$usernamePath = ".github_username"
+
+if ((Test-Path $tokenPath) -and (Test-Path $usernamePath)) {
     $githubTokenText = Get-Content $tokenPath
-    Write-Host "已读取保存的 GitHub Token" -ForegroundColor Green
+    $githubUsername = Get-Content $usernamePath
+    Write-Host "已读取保存的 GitHub 配置" -ForegroundColor Green
 } else {
     # 获取 GitHub 用户名和令牌
     $githubUsername = Read-Host "请输入你的 GitHub 用户名"
@@ -119,9 +122,10 @@ if (Test-Path $tokenPath) {
     $BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($githubToken)
     $githubTokenText = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
     
-    # 保存 Token
+    # 保存配置
     $githubTokenText | Set-Content $tokenPath
-    Write-Host "Token 已保存，下次无需重新输入" -ForegroundColor Green
+    $githubUsername | Set-Content $usernamePath
+    Write-Host "GitHub 配置已保存，下次无需重新输入" -ForegroundColor Green
 }
 
 # Git 操作
@@ -244,7 +248,14 @@ if ($currentBranch -eq "") {
 
 # 推送到 GitHub（使用 token 认证）
 Write-Host "`n推送到 GitHub..." -ForegroundColor Green
+if ([string]::IsNullOrEmpty($githubUsername)) {
+    Write-Host "错误：GitHub 用户名为空！" -ForegroundColor Red
+    $githubUsername = Read-Host "请重新输入你的 GitHub 用户名"
+    $githubUsername | Set-Content $usernamePath
+}
+
 $remoteUrl = "https://${githubUsername}:${githubTokenText}@github.com/${githubUsername}/MCWordGame.git"
+Write-Host "正在推送到: github.com/${githubUsername}/MCWordGame.git" -ForegroundColor Yellow
 git remote set-url origin $remoteUrl
 
 # 尝试推送

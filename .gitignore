@@ -33,3 +33,6 @@ hs_err_pid*
 
 # token
 .github_token
+
+# GitHub 配置
+.github_username
