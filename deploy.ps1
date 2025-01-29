@@ -33,6 +33,13 @@ Write-Host "`n读取当前版本..." -ForegroundColor Green
 $pomContent = Get-Content "pom.xml" -Raw
 if ($pomContent -match '<version>(.*?)</version>') {
     $currentVersion = $matches[1]
+    # 如果版本号是变量，则从 plugin.yml 读取
+    if ($currentVersion -eq '$newVersion') {
+        $ymlContent = Get-Content "src/main/resources/plugin.yml" -Raw
+        if ($ymlContent -match "version: '(.*?)'") {
+            $currentVersion = $matches[1]
+        }
+    }
     Write-Host "当前版本: $currentVersion" -ForegroundColor White
 } else {
     Write-Host "错误：无法从 pom.xml 读取版本号！" -ForegroundColor Red
@@ -100,8 +107,22 @@ $content = Get-Content "src/main/resources/plugin.yml" -Encoding UTF8
 $content = $content -replace "version: '.*'", "version: '$newVersion'"
 $content | Set-Content "src/main/resources/plugin.yml" -Encoding UTF8
 
-# 获取 GitHub 用户名
-$githubUsername = Read-Host "请输入你的 GitHub 用户名"
+# 尝试读取保存的 Token
+$tokenPath = ".github_token"
+if (Test-Path $tokenPath) {
+    $githubTokenText = Get-Content $tokenPath
+    Write-Host "已读取保存的 GitHub Token" -ForegroundColor Green
+} else {
+    # 获取 GitHub 用户名和令牌
+    $githubUsername = Read-Host "请输入你的 GitHub 用户名"
+    $githubToken = Read-Host "请输入你的 GitHub Token (从 https://github.com/settings/tokens 获取，之后会保存不用重复输入)" -AsSecureString
+    $BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($githubToken)
+    $githubTokenText = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
+    
+    # 保存 Token
+    $githubTokenText | Set-Content $tokenPath
+    Write-Host "Token 已保存，下次无需重新输入" -ForegroundColor Green
+}
 
 # Git 操作
 if (-not (Test-Path ".git")) {
@@ -185,22 +206,38 @@ git tag -a "v$newVersion" -m "Version $newVersion"
 $remoteExists = git remote -v | Select-String "origin"
 if (-not $remoteExists) {
     Write-Host "`n创建 GitHub 仓库..." -ForegroundColor Green
+    $headers = @{
+        Authorization = "token $githubTokenText"
+        Accept = "application/vnd.github.v3+json"
+    }
+    
     $body = @{
         name = "MCWordGame"
         description = "Minecraft 文字竞速游戏插件"
         private = $false
     } | ConvertTo-Json
 
-    $response = Invoke-RestMethod -Uri "https://api.github.com/user/repos" `
-        -Method Post -Headers @{Authorization = "Basic $([Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("$($githubUsername):$($githubToken)")))"} `
-        -Body $body -ContentType "application/json"
+    try {
+        $response = Invoke-RestMethod -Uri "https://api.github.com/user/repos" `
+            -Method Post `
+            -Headers $headers `
+            -Body $body `
+            -ContentType "application/json"
 
-    Write-Host "`n添加远程仓库..." -ForegroundColor Green
-    git remote add origin "https://github.com/$githubUsername/MCWordGame.git"
+        Write-Host "`n添加远程仓库..." -ForegroundColor Green
+        git remote add origin "https://github.com/$githubUsername/MCWordGame.git"
+    } catch {
+        Write-Host "错误：创建仓库失败！" -ForegroundColor Red
+        Write-Host $_.Exception.Message -ForegroundColor Red
+        pause
+        exit 1
+    }
 }
 
-# 推送到 GitHub
+# 推送到 GitHub（使用 token 认证）
 Write-Host "`n推送到 GitHub..." -ForegroundColor Green
+$remoteUrl = "https://${githubUsername}:${githubTokenText}@github.com/${githubUsername}/MCWordGame.git"
+git remote set-url origin $remoteUrl
 git push -u origin main --tags
 
 Write-Host "`n=== 部署完成！===" -ForegroundColor Green

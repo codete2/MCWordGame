@@ -1,7 +1,7 @@
 ﻿name: MCWordGame
-version: '1.7.0-RELEASE'
+version: '1.8.1-RELEASE'
 main: dev.codetea.mcwordgame.MCWordGame
-api-version: '1.7.0-RELEASE'
+api-version: '1.8.1-RELEASE'
 depend: [Vault]
 author: Codetea
 commands:
